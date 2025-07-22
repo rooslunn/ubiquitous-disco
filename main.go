@@ -9,8 +9,8 @@ import (
 )
 
 type Feeds struct {
-	Version string  `json:"version"`
-	Items   []*Feed `json:"items"`
+	Version     string  `json:"version"`
+	Items       []*Feed `json:"items"`
 }
 
 type Feed struct {
@@ -18,11 +18,23 @@ type Feed struct {
 	Hash    string `json:"hash"`
 	Url     string `json:"url"`
 	Updated string `json:"updated"`
+	UnproccessedSet string
 }
+
+const (
+	SERVICE_DIR = "./.sputnik"
+)
 
 func main() {
 
-	file, err := os.Open("feeds.json")
+	user := GetSHA256("rkladko@gmail.com")
+
+	userFeedsFile, err := GetFeedsFile(user)
+	if err != nil {
+		panic(err)
+	}
+
+	file, err := os.Open(userFeedsFile)
 	if err != nil {
 		panic(err)
 	}
