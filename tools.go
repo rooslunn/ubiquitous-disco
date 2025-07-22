@@ -36,3 +36,11 @@ func GetFeedsFile(hash string) (string, error) {
 
 	return file, nil
 }
+
+func firstNRunes(s string, n int) string {
+	runes := []rune(s)
+	if n >= len(runes) {
+		return s
+	}
+	return string(runes[:n])
+}

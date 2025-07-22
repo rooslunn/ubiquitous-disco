@@ -4,21 +4,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mmcdole/gofeed"
 )
 
 type Feeds struct {
-	Version     string  `json:"version"`
-	Items       []*Feed `json:"items"`
+	Version string  `json:"version"`
+	Items   []*Feed `json:"items"`
+}
+
+type UnprocessedItem struct {
+	URL  string `json:"url"`
+	GUID string `json:"guid"`
 }
 
 type Feed struct {
-	Type    string `json:"type"`
-	Hash    string `json:"hash"`
-	Url     string `json:"url"`
-	Updated string `json:"updated"`
-	UnproccessedSet string
+	Type             string             `json:"type"`
+	Hash             string             `json:"hash"`
+	Url              string             `json:"url"`
+	Updated          string             `json:"updated"`
+	UnproccssedSet   string             `json:"unprocessed_set"`
+	UnprocessedItems []*UnprocessedItem `json:"unprocessed_items"`
 }
 
 const (
@@ -46,23 +53,39 @@ func main() {
 	}
 	file.Close()
 
-	for _, f := range feeds.Items {
+	for _, userFeed := range feeds.Items {
 
-		fmt.Printf("Hash: %s, Updated: %s, URL: %s\n", f.Hash, f.Updated, f.Url)
+		fmt.Println("Feed info:")
+		fmt.Printf("::Hash: %s, Updated: %s, URL: %s\n", userFeed.Hash, userFeed.Updated, userFeed.Url)
 
-		fp := gofeed.NewParser()
-		feed, err := fp.ParseURL(f.Url)
+		feedParser := gofeed.NewParser()
+		remoteFeed, err := feedParser.ParseURL(userFeed.Url)
 		if err != nil {
 			fmt.Println(err)
 			continue
 		}
 
-		if feed.Updated != f.Updated {
-			fmt.Println("Feeds updated", len(feed.Items))
-			f.Updated = feed.Updated
-			for _, item := range feed.Items {
-				fmt.Printf("Title: %s, Date: %s, GUID: %s\n", firstNRunes(item.Title, 64), item.Updated, item.GUID)
+		if remoteFeed.Updated != userFeed.Updated {
+
+			fmt.Println("Received feeds count: ", len(remoteFeed.Items))
+
+			userFeed.Updated = remoteFeed.Updated
+			newFeeds := 0
+
+			fmt.Println("New Items:")
+
+			for i, remoteItem := range remoteFeed.Items {
+				if !strings.Contains(userFeed.UnproccssedSet, remoteItem.GUID) {
+					fmt.Printf("%d. GUID: %s, Title: %s, Date: %s\n", i, remoteItem.GUID, firstNRunes(remoteItem.Title, 64), remoteItem.Updated)
+					userFeed.UnproccssedSet += "," + remoteItem.GUID
+					userFeed.UnprocessedItems = append(userFeed.UnprocessedItems, &UnprocessedItem{
+						GUID: remoteItem.GUID,
+						URL:  remoteItem.Link,
+					})
+					newFeeds++
+				}
 			}
+			fmt.Println("New feeds receieved: ", newFeeds)
 		} else {
 			fmt.Println("No new items")
 		}
@@ -70,7 +93,7 @@ func main() {
 	}
 
 	// save json
-	file, err = os.Create("feeds.json")
+	file, err = os.Create(userFeedsFile)
 	if err != nil {
 		panic(err)
 	}
@@ -81,12 +104,4 @@ func main() {
 		panic(err)
 	}
 
-}
-
-func firstNRunes(s string, n int) string {
-	runes := []rune(s)
-	if n >= len(runes) {
-		return s
-	}
-	return string(runes[:n])
 }
