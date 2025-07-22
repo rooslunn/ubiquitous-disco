@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -22,17 +23,17 @@ func GetSHA256(name string) string {
 
 func GetFeedsFile(hash string) (string, error) {
 	if len(hash) < 2 {
-		return "", ErrStringTooShort 
+		return "", ErrStringTooShort
 	}
 
 	subFolder := hash[:2]
 	userFile := hash[2:]
 
-	file := filepath.Join(SERVICE_DIR, subFolder, userFile + ".json")
+	file := filepath.Join(SERVICE_DIR, subFolder, userFile+".json")
 	_, err := os.Stat(file)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return "", os.ErrNotExist
-	} 
+	}
 
 	return file, nil
 }
@@ -43,4 +44,9 @@ func firstNRunes(s string, n int) string {
 		return s
 	}
 	return string(runes[:n])
+}
+
+func setupLogger() *slog.Logger {
+	// return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 }

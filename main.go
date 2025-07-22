@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
@@ -24,7 +23,7 @@ type Feed struct {
 	Hash             string             `json:"hash"`
 	Url              string             `json:"url"`
 	Updated          string             `json:"updated"`
-	UnproccssedSet   string             `json:"unprocessed_set"`
+	UnprocessedSet   string             `json:"unprocessed_set"`
 	UnprocessedItems []*UnprocessedItem `json:"unprocessed_items"`
 }
 
@@ -32,52 +31,72 @@ const (
 	SERVICE_DIR = "./.sputnik"
 )
 
+const (
+	E_GET_FEED_FILE = iota + 1
+	E_READ_FEED_FILE
+	E_DECODE_FEED_FILE
+	E_OPEN_FEED_FILE_UPDATE
+	E_ENCDOING_UNPROCESSED
+)
+
+// todo: main log
+// todo: env config
+// todo: tests
+// todo: send tg message
+// todo: post mmiddlewares (translate, expand, picturize, etc.)
+
 func main() {
 
-	user := GetSHA256("rkladko@gmail.com")
+	log := setupLogger()
 
-	userFeedsFile, err := GetFeedsFile(user)
+	user_id := "rkladko@gmail.com"
+	user_hash := GetSHA256(user_id)
+	log.Info("user is ready", "id", user_id, "hash", user_hash)
+
+	userFeedsFile, err := GetFeedsFile(user_hash)
 	if err != nil {
-		panic(err)
+		log.Error(err.Error())
+		os.Exit(E_GET_FEED_FILE)
 	}
+	log.Info("user feed file", "path", userFeedsFile)
+
 
 	file, err := os.Open(userFeedsFile)
 	if err != nil {
-		panic(err)
+		log.Error(err.Error())
+		os.Exit(E_READ_FEED_FILE)
 	}
+	defer file.Close()
 
 	var feeds Feeds
 	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(&feeds); err != nil {
-		panic(err)
+		log.Error(err.Error())
+		os.Exit(E_DECODE_FEED_FILE)
 	}
-	file.Close()
 
 	for _, userFeed := range feeds.Items {
 
-		fmt.Println("Feed info:")
-		fmt.Printf("::Hash: %s, Updated: %s, URL: %s\n", userFeed.Hash, userFeed.Updated, userFeed.Url)
+		log.Info("user feed", "hash", userFeed.Hash, "updated", userFeed.Updated, "url", userFeed.Url)
 
 		feedParser := gofeed.NewParser()
 		remoteFeed, err := feedParser.ParseURL(userFeed.Url)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err.Error())
 			continue
 		}
 
 		if remoteFeed.Updated != userFeed.Updated {
 
-			fmt.Println("Received feeds count: ", len(remoteFeed.Items))
+			log.Info("download feed updates", "received", len(remoteFeed.Items))
 
 			userFeed.Updated = remoteFeed.Updated
 			newFeeds := 0
 
-			fmt.Println("New Items:")
-
-			for i, remoteItem := range remoteFeed.Items {
-				if !strings.Contains(userFeed.UnproccssedSet, remoteItem.GUID) {
-					fmt.Printf("%d. GUID: %s, Title: %s, Date: %s\n", i, remoteItem.GUID, firstNRunes(remoteItem.Title, 64), remoteItem.Updated)
-					userFeed.UnproccssedSet += "," + remoteItem.GUID
+			for _, remoteItem := range remoteFeed.Items {
+				if !strings.Contains(userFeed.UnprocessedSet, remoteItem.GUID) {
+					log.Info("new post", "guid", remoteItem.GUID, "title", firstNRunes(remoteItem.Title, 64), "updated", remoteItem.Updated)
+					userFeed.UnprocessedSet += "," + remoteItem.GUID
 					userFeed.UnprocessedItems = append(userFeed.UnprocessedItems, &UnprocessedItem{
 						GUID: remoteItem.GUID,
 						URL:  remoteItem.Link,
@@ -85,23 +104,28 @@ func main() {
 					newFeeds++
 				}
 			}
-			fmt.Println("New feeds receieved: ", newFeeds)
+			log.Info("total new feeds receieved", "total", newFeeds)
 		} else {
-			fmt.Println("No new items")
+			log.Info("no new items")
 		}
 
 	}
 
-	// save json
+	log.Info("saving unprocessed", "path", userFeedsFile)
+
 	file, err = os.Create(userFeedsFile)
 	if err != nil {
-		panic(err)
+		log.Error(err.Error())
+		os.Exit(E_OPEN_FEED_FILE_UPDATE)
 	}
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
 	if err := encoder.Encode(feeds); err != nil {
-		panic(err)
+		log.Error(err.Error())
+		os.Exit(E_ENCDOING_UNPROCESSED)
 	}
+
+	log.Info("session done")
 
 }
