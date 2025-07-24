@@ -1,4 +1,4 @@
-package main
+package rss_reader
 
 import (
 	"crypto/sha256"
@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	ErrStringTooShort = errors.New("user hash is too short")
+	ErrSHA256IncorrectLen = errors.New("user hash is too short")
 )
 
 func GetSHA256(name string) string {
@@ -22,8 +22,8 @@ func GetSHA256(name string) string {
 }
 
 func GetFeedsFile(hash string) (string, error) {
-	if len(hash) < 2 {
-		return "", ErrStringTooShort
+	if len(hash) < 64 {
+		return "", ErrSHA256IncorrectLen
 	}
 
 	subFolder := hash[:2]
@@ -49,4 +49,12 @@ func firstNRunes(s string, n int) string {
 func setupLogger() *slog.Logger {
 	// return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+}
+
+func deepCopy(originalMap UnrpocessedGUIDSet) UnrpocessedGUIDSet {
+	deepCopyMap := make(UnrpocessedGUIDSet, len(originalMap))
+	for key, value := range originalMap {
+		deepCopyMap[key] = value
+	}
+	return deepCopyMap
 }

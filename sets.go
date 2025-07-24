@@ -1,4 +1,4 @@
-package main
+package rss_reader
 
 type Set struct {
 	m map[any]struct{}
