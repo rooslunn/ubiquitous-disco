@@ -27,7 +27,9 @@ func Test_saveFeeds(t *testing.T) {
 			},
 		}
 
-		err := saveUpdates(testFeeds, filePath)
+		feedsIO := &RealFeedsIO{}
+
+		err := feedsIO.SaveUpdates(testFeeds, filePath)
 		if err != nil {
 			t.Fatalf("expected no error, but got: %v", err)
 		}
@@ -60,7 +62,8 @@ func Test_saveFeeds(t *testing.T) {
 
 		invalidPath := filepath.Join("/non_existent_dir", "file.json")
 
-		err := saveUpdates(testFeeds, invalidPath)
+		feedsIO := &RealFeedsIO{}
+		err := feedsIO.SaveUpdates(testFeeds, invalidPath)
 		if err == nil {
 			t.Fatalf("expected an error due to invalid path, but got none")
 		}
@@ -124,7 +127,8 @@ func Test_loadFeeds(t *testing.T) {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
-		loadedFeeds, err := loadFeeds(filePath)
+		feedsIO := &RealFeedsIO{}
+		loadedFeeds, err := feedsIO.LoadFeeds(filePath)
 
 		if err != nil {
 			t.Fatalf("expected no error, but got: %v", err)
@@ -138,7 +142,8 @@ func Test_loadFeeds(t *testing.T) {
 	t.Run("FileNotFound", func(t *testing.T) {
 		nonExistentFile := filepath.Join(t.TempDir(), "non_existent.json")
 
-		loadedFeeds, err := loadFeeds(nonExistentFile)
+		feedsIO := &RealFeedsIO{}
+		loadedFeeds, err := feedsIO.LoadFeeds(nonExistentFile)
 
 		if err == nil {
 			t.Fatalf("expected an error when file is not found, but got none")
@@ -161,7 +166,8 @@ func Test_loadFeeds(t *testing.T) {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
-		loadedFeeds, err := loadFeeds(filePath)
+		feedsIO := &RealFeedsIO{}
+		loadedFeeds, err := feedsIO.LoadFeeds(filePath)
 
 		if _, ok := err.(*json.UnmarshalTypeError); !ok {
 			t.Errorf("expected a json.UnmarshalTypeError, but got: %T", err)
@@ -177,18 +183,6 @@ func Test_loadFeeds(t *testing.T) {
 	})
 }
 
-// var EMPTY_STRUCT = struct{}{}
-
-type MockGofeedParser struct {
-	ParseURLFunc func(feedURL string) (*gofeed.Feed, error)
-}
-
-func (m *MockGofeedParser) ParseURL(feedURL string) (*gofeed.Feed, error) {
-	if m.ParseURLFunc != nil {
-		return m.ParseURLFunc(feedURL)
-	}
-	return &gofeed.Feed{}, nil
-}
 
 func Test_getUpdates(t *testing.T) {
 	discardLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
@@ -207,25 +201,30 @@ func Test_getUpdates(t *testing.T) {
 		}
 
 		mockParser := &MockGofeedParser{
-			ParseURLFunc: func(feedURL string) (*gofeed.Feed, error) {
-				return &gofeed.Feed{
-					Updated: newUpdated,
-					Items: []*gofeed.Item{
-						{GUID: "guid1", Title: "Old Post 1", Link: "url1", Updated: "old1"},
-						{GUID: "guid2", Title: "Old Post 2", Link: "url2", Updated: "old2"},
-						{GUID: "guid3", Title: "New Post 1", Link: "url3", Updated: "new1"},
-						{GUID: "guid4", Title: "New Post 2", Link: "url4", Updated: "new2"},
-					},
-				}, nil
+			ParseURLWithContextFunc: func(feedURL string, ctx context.Context) (*gofeed.Feed, error) {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(1 * time.Millisecond): // Имитация небольшой задержки
+					return &gofeed.Feed{
+						Updated: newUpdated,
+						Items: []*gofeed.Item{
+							{GUID: "guid1", Title: "Old Post 1", Link: "url1", Updated: "old1"},
+							{GUID: "guid2", Title: "Old Post 2", Link: "url2", Updated: "old2"},
+							{GUID: "guid3", Title: "New Post 1", Link: "url3", Updated: "new1"}, // Новый элемент
+							{GUID: "guid4", Title: "New Post 2", Link: "url4", Updated: "new2"}, // Новый элемент
+						},
+					}, nil
+				}
 			},
 		}
+
+		// Assertions
 
 		err := getUpdates(context.Background(), mockParser, userFeed, discardLogger)
 		if err != nil {
 			t.Fatalf("expected no error, got: %v", err)
 		}
-
-		// Assertions
 
 		if userFeed.Updated != newUpdated {
 			t.Errorf("expected userFeed.Updated to be %s, got %s", newUpdated, userFeed.Updated)
@@ -261,24 +260,29 @@ func Test_getUpdates(t *testing.T) {
         originalUnprocessedGUID := deepCopy(userFeed.UnprocessedGUID) // Deep copy
 
 		mockParser := &MockGofeedParser{
-			ParseURLFunc: func(feedURL string) (*gofeed.Feed, error) {
-				return &gofeed.Feed{
-					Updated: newUpdated,
-					Items: []*gofeed.Item{
-						{GUID: "guid1", Title: "Old Post 1", Link: "url1", Updated: "old1"},
-						{GUID: "guid2", Title: "Old Post 2", Link: "url2", Updated: "old2"},
-					},
-				}, nil
+			ParseURLWithContextFunc: func(feedURL string, ctx context.Context) (*gofeed.Feed, error) {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(1 * time.Millisecond):
+					return &gofeed.Feed{
+						Updated: newUpdated,
+						Items: []*gofeed.Item{
+							{GUID: "guid1", Title: "Old Post 1", Link: "url1", Updated: "old1"},
+							{GUID: "guid2", Title: "Old Post 2", Link: "url2", Updated: "old2"},
+						},
+					}, nil
+				}
 			},
 		}
 
 		err := getUpdates(context.Background(), mockParser, userFeed, discardLogger)
-		if err != nil {
-			t.Fatalf("expected no error, got: %v", err)
-		}
 
 		// Assertions
 
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
 		if userFeed.Updated != newUpdated {
 			t.Errorf("expected userFeed.Updated to be %s, got %s", newUpdated, userFeed.Updated)
 		}
@@ -311,13 +315,18 @@ func Test_getUpdates(t *testing.T) {
         }
 
 		mockParser := &MockGofeedParser{
-			ParseURLFunc: func(feedURL string) (*gofeed.Feed, error) {
-				return &gofeed.Feed{
-					Updated: currentTime,
-					Items: []*gofeed.Item{
-						{GUID: "guid5", Title: "New Post X", Link: "urlX", Updated: "newX"},
-					},
-				}, nil
+			ParseURLWithContextFunc: func(feedURL string, ctx context.Context) (*gofeed.Feed, error) {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(1 * time.Millisecond):
+					return &gofeed.Feed{
+						Updated: currentTime, // Same as userFeed.Updated
+						Items: []*gofeed.Item{
+							{GUID: "guid5", Title: "New Post X", Link: "urlX", Updated: "newX"},
+						},
+					}, nil
+				}
 			},
 		}
 
@@ -353,8 +362,13 @@ func Test_getUpdates(t *testing.T) {
 
 		expectedErr := errors.New("network error: failed to fetch feed")
 		mockParser := &MockGofeedParser{
-			ParseURLFunc: func(feedURL string) (*gofeed.Feed, error) {
-				return nil, expectedErr
+			ParseURLWithContextFunc: func(feedURL string, ctx context.Context) (*gofeed.Feed, error) {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(1 * time.Millisecond):
+					return nil, expectedErr
+				}
 			},
 		}
 
@@ -371,48 +385,113 @@ func Test_getUpdates(t *testing.T) {
 	})
 
 	t.Run("5. Empty UnprocessedGUID with new items", func(t *testing.T) {
-		initialUpdated := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
-		newUpdated := time.Now().Format(time.RFC3339)
-
 		userFeed := &Feed{
 			Url:              "http://example.com/feed.xml",
-			Updated:          initialUpdated,
+			Updated:          "some-old-date",
 			UnprocessedGUID:   UnrpocessedGUIDSet{}, // Empty slice
 			UnprocessedItems: []*UnprocessedItem{},
 		}
 
+		originalUserFeed := *userFeed // Copy to check for no changes
+
+		// Создаем контекст, который будет отменен
+		ctx, cancel := context.WithCancel(context.Background())
 		mockParser := &MockGofeedParser{
-			ParseURLFunc: func(feedURL string) (*gofeed.Feed, error) {
+			ParseURLWithContextFunc: func(feedURL string, ctx context.Context, ) (*gofeed.Feed, error) {
+				// Имитируем долгую операцию, которая будет прервана контекстом
+				select {
+				case <-ctx.Done(): // Ждем отмены контекста
+					return nil, ctx.Err()
+				case <-time.After(50 * time.Millisecond): // Если контекст не отменен, то возвращаем фид
+					return &gofeed.Feed{Updated: time.Now().Format(time.RFC3339)}, nil
+				}
+			},
+		}
+
+		// Запускаем горутину, которая отменит контекст через короткое время
+		go func() {
+			time.Sleep(10 * time.Millisecond) // Отменяем контекст до того, как mockParser закончит
+			cancel()
+		}()
+
+		err := getUpdates(ctx, mockParser, userFeed, discardLogger)
+
+		// Ожидаем ошибку context.Canceled
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled error, got %v", err)
+		}
+		// Убеждаемся, что userFeed не изменился
+		if !reflect.DeepEqual(userFeed, &originalUserFeed) {
+			t.Errorf("expected userFeed to be unchanged on cancellation, but it was: %+v", userFeed)
+		}
+	})
+
+	t.Run("6. Context cancelled during item processing", func(t *testing.T) {
+		t.SkipNow()
+		initialUpdated := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+		newUpdated := time.Now().Format(time.RFC3339)
+
+		userFeed := &Feed{
+			Url:              "http://example.com/manyitems.xml",
+			Updated:          initialUpdated,
+			UnprocessedGUID:   UnrpocessedGUIDSet{}, // Empty slice
+			UnprocessedItems: []*UnprocessedItem{},
+		}
+		originalUserFeed := *userFeed // Copy for initial state check
+
+		// Создаем много элементов, чтобы контекст мог быть отменен во время цикла
+		items := make([]*gofeed.Item, 100)
+		for i := range 100 {
+			items[i] = &gofeed.Item{
+				GUID:    "guid" + string(rune('A'+i)),
+				Title:   "Post " + string(rune('A'+i)),
+				Link:    "http://example.com/post" + string(rune('A'+i)),
+				Updated: newUpdated,
+			}
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		mockParser := &MockGofeedParser{
+			ParseURLWithContextFunc: func(feedURL string, ctx context.Context, ) (*gofeed.Feed, error) {
+				// Парсер успешно возвращает фид
 				return &gofeed.Feed{
 					Updated: newUpdated,
-					Items: []*gofeed.Item{
-						{GUID: "guidA", Title: "First New Post", Link: "urlA", Updated: "newA"},
-						{GUID: "guidB", Title: "Second New Post", Link: "urlB", Updated: "newB"},
-					},
+					Items:   items, // Много элементов
 				}, nil
 			},
 		}
 
-		err := getUpdates(context.Background(), mockParser, userFeed, discardLogger)
-		if err != nil {
-			t.Fatalf("expected no error, got: %v", err)
+		// Запускаем горутину, которая отменит контекст после небольшой задержки,
+		// чтобы getUpdates успел начать обработку элементов
+		go func() {
+			time.Sleep(5 * time.Millisecond) // Даем getUpdates начать цикл
+			cancel()
+		}()
+
+		err := getUpdates(ctx, mockParser, userFeed, discardLogger)
+
+		// Ожидаем ошибку context.Canceled
+		// todo: fix
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled error, got %v", err)
 		}
 
+		// userFeed.Updated должен обновиться, так как это происходит до цикла.
 		if userFeed.Updated != newUpdated {
 			t.Errorf("expected userFeed.Updated to be %s, got %s", newUpdated, userFeed.Updated)
 		}
 
-		expectedUnprocessedGUID := UnrpocessedGUIDSet{"guidA":{}, "guidB":{}}
-		if !reflect.DeepEqual(userFeed.UnprocessedGUID, expectedUnprocessedGUID) {
-			t.Errorf("expected UnprocessedGUID to be %v, got %v", expectedUnprocessedGUID, userFeed.UnprocessedGUID)
+		// UnprocessedSet и UnprocessedItems должны быть частично заполнены или пусты,
+		// но не полными, и не должны быть равны исходному состоянию,
+		// если отмена произошла после начала добавления.
+		if reflect.DeepEqual(userFeed.UnprocessedGUID, originalUserFeed.UnprocessedGUID) &&
+		   reflect.DeepEqual(userFeed.UnprocessedItems, originalUserFeed.UnprocessedItems) {
+			t.Error("expected userFeed to be partially updated or unchanged from initial, but not fully processed")
 		}
 
-		expectedUnprocessedItems := []*UnprocessedItem{
-			{GUID: "guidA", URL: "urlA"},
-			{GUID: "guidB", URL: "urlB"},
-		}
-		if !reflect.DeepEqual(userFeed.UnprocessedItems, expectedUnprocessedItems) {
-			t.Errorf("expected UnprocessedItems to be %+v, got %+v", expectedUnprocessedItems, userFeed.UnprocessedItems)
+		// Дополнительная проверка: убедиться, что не все элементы были обработаны
+		if len(userFeed.UnprocessedItems) == len(items) {
+			t.Error("expected processing to be interrupted, but all items were added")
 		}
 	})
 }

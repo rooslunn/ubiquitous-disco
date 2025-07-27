@@ -65,7 +65,8 @@ func TestGetFeedsFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetFeedsFile(tt.args.hash)
+			feedsIO := &RealFeedsIO{}
+			got, err := feedsIO.GetFeedsFile(tt.args.hash)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetFeedsFile() error = %v, wantErr %v", err, tt.wantErr)
 				return

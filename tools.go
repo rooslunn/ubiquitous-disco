@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"os"
-	"path/filepath"
 )
 
 var (
@@ -19,23 +18,6 @@ func GetSHA256(name string) string {
 	hashInBytes := h.Sum(nil)
 	hashInString := hex.EncodeToString(hashInBytes)
 	return hashInString
-}
-
-func GetFeedsFile(hash string) (string, error) {
-	if len(hash) < 64 {
-		return "", ErrSHA256IncorrectLen
-	}
-
-	subFolder := hash[:2]
-	userFile := hash[2:]
-
-	file := filepath.Join(SERVICE_DIR, subFolder, userFile+".json")
-	_, err := os.Stat(file)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		return "", os.ErrNotExist
-	}
-
-	return file, nil
 }
 
 func firstNRunes(s string, n int) string {
