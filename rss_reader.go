@@ -81,7 +81,7 @@ func run(args []string, feedsIO FeedsIO, feedFetcher FeedFetcher, stdout io.Writ
 	go func() {
 		select {
 		case sig := <-sigChan:
-			log.Info("received signal, initiating shutdown...", "signal", sig)
+			log.Info(LOG_INFO_GRACEFUL_SHUTDOWN, "signal", sig)
 			cancel()
 		case <-ctx.Done():
 		}
@@ -127,7 +127,7 @@ func run(args []string, feedsIO FeedsIO, feedFetcher FeedFetcher, stdout io.Writ
 
 	if err := g.Wait(); err != nil {
 		if errors.Is(err, context.Canceled) {
-			log.Info("feed update process was cancelled.")
+			log.Info(LOG_INFO_UPDATE_CANCELLED)
 			return 0
 		} else {
 			log.Error("one or more feed updates failed", "error", err)
@@ -137,7 +137,7 @@ func run(args []string, feedsIO FeedsIO, feedFetcher FeedFetcher, stdout io.Writ
 		log.Info("all feed updates completed successfully")
 	}
 
-	log.Info("saving updates to", "path", userFeedsFile)
+	log.Info(LOG_INFO_SAVING_UPDATES, "path", userFeedsFile)
 
 	err = feedsIO.SaveUpdates(feeds, userFeedsFile)
 	if err != nil {
