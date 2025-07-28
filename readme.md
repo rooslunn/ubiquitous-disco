@@ -1,1 +1,1 @@
-My fast rss reader
+RSS Reader for Sputnik
