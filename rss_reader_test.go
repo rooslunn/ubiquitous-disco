@@ -427,7 +427,7 @@ func Test_getUpdates(t *testing.T) {
 	})
 
 	t.Run("6. Context cancelled during item processing", func(t *testing.T) {
-		t.SkipNow()
+		// t.SkipNow()
 		initialUpdated := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
 		newUpdated := time.Now().Format(time.RFC3339)
 
@@ -437,11 +437,13 @@ func Test_getUpdates(t *testing.T) {
 			UnprocessedGUID:   UnrpocessedGUIDSet{}, // Empty slice
 			UnprocessedItems: []*UnprocessedItem{},
 		}
+
 		originalUserFeed := *userFeed // Copy for initial state check
 
-		// Создаем много элементов, чтобы контекст мог быть отменен во время цикла
-		items := make([]*gofeed.Item, 100)
-		for i := range 100 {
+		// test feed items
+		testItemsCount := 10000
+		items := make([]*gofeed.Item, testItemsCount)
+		for i := range testItemsCount {
 			items[i] = &gofeed.Item{
 				GUID:    "guid" + string(rune('A'+i)),
 				Title:   "Post " + string(rune('A'+i)),
@@ -453,43 +455,33 @@ func Test_getUpdates(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		mockParser := &MockGofeedParser{
 			ParseURLWithContextFunc: func(feedURL string, ctx context.Context, ) (*gofeed.Feed, error) {
-				// Парсер успешно возвращает фид
 				return &gofeed.Feed{
 					Updated: newUpdated,
-					Items:   items, // Много элементов
+					Items:   items,
 				}, nil
 			},
 		}
 
-		// Запускаем горутину, которая отменит контекст после небольшой задержки,
-		// чтобы getUpdates успел начать обработку элементов
 		go func() {
-			time.Sleep(5 * time.Millisecond) // Даем getUpdates начать цикл
+			time.Sleep(1 * time.Millisecond)
 			cancel()
 		}()
 
 		err := getUpdates(ctx, mockParser, userFeed, discardLogger)
 
-		// Ожидаем ошибку context.Canceled
-		// todo: fix
 		if !errors.Is(err, context.Canceled) {
 			t.Errorf("expected context.Canceled error, got %v", err)
 		}
 
-		// userFeed.Updated должен обновиться, так как это происходит до цикла.
 		if userFeed.Updated != newUpdated {
 			t.Errorf("expected userFeed.Updated to be %s, got %s", newUpdated, userFeed.Updated)
 		}
 
-		// UnprocessedSet и UnprocessedItems должны быть частично заполнены или пусты,
-		// но не полными, и не должны быть равны исходному состоянию,
-		// если отмена произошла после начала добавления.
 		if reflect.DeepEqual(userFeed.UnprocessedGUID, originalUserFeed.UnprocessedGUID) &&
 		   reflect.DeepEqual(userFeed.UnprocessedItems, originalUserFeed.UnprocessedItems) {
 			t.Error("expected userFeed to be partially updated or unchanged from initial, but not fully processed")
 		}
 
-		// Дополнительная проверка: убедиться, что не все элементы были обработаны
 		if len(userFeed.UnprocessedItems) == len(items) {
 			t.Error("expected processing to be interrupted, but all items were added")
 		}

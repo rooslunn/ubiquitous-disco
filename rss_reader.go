@@ -160,12 +160,12 @@ func getUpdates(ctx context.Context, feedParser FeedFetcher, userFeed *Feed, log
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			log.Info("feed processing cancelled", "url", userFeed.Url)
-			return err
 		}
 		return err
 	}
 
 	if remoteFeed.Updated != userFeed.Updated {
+
 		log.Info("got updates", "count", len(remoteFeed.Items))
 		userFeed.Updated = remoteFeed.Updated
 		newFeeds := 0
