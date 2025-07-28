@@ -45,6 +45,7 @@ func (m *MockGofeedParser) ParseURL(feedURL string) (*gofeed.Feed, error) {
 	}
 	return &gofeed.Feed{}, nil
 }
+
 func (m *MockGofeedParser) ParseURLWithContext(feedURL string, ctx context.Context ) (*gofeed.Feed, error) {
 	if m.ParseURLWithContextFunc != nil {
 		return m.ParseURLWithContextFunc(feedURL, ctx)
