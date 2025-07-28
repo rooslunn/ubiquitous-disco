@@ -39,9 +39,8 @@ func (m *MockFeedsIO) SaveUpdates(feeds Feeds, userFeedsFile string) error {
 	return nil // Поведение по умолчанию: без ошибок
 }
 
-// TestRunFunction содержит тесты для функции run
 func TestRunFunction(t *testing.T) {
-	// Создаем буфер для захвата вывода stdout (логов)
+	// buffs for saving output
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
 
@@ -50,10 +49,11 @@ func TestRunFunction(t *testing.T) {
 		// Создаем мок FeedsIO для этого теста
 		mockFeedsIO := &MockFeedsIO{
 			GetFeedsFileFunc: func(userHash string) (string, error) {
-				return "test_feeds.json", nil // Имитируем успешный путь
+				// success file
+				return "test_feeds.json", nil
 			},
 			LoadFeedsFunc: func(userFeedsFile string) (Feeds, error) {
-				// Имитируем загрузку фидов
+				// mock success load
 				return Feeds{
 					Items: []*Feed{
 						{
@@ -66,12 +66,12 @@ func TestRunFunction(t *testing.T) {
 				}, nil
 			},
 			SaveUpdatesFunc: func(feeds Feeds, userFeedsFile string) error {
-				// Имитируем успешное сохранение
+				// success save
 				return nil
 			},
 		}
 
-		// Создаем мок FeedFetcher (для getUpdates)
+		// Mock for FeedFetcher (для getUpdates)
 		mockFeedFetcher := &MockGofeedParser{
 			ParseURLWithContextFunc: func(feedURL string, ctx context.Context, ) (*gofeed.Feed, error) {
 				return &gofeed.Feed{
@@ -81,8 +81,8 @@ func TestRunFunction(t *testing.T) {
 			},
 		}
 
-		// Вызываем run с моками
-		exitCode := run([]string{"app_name"}, mockFeedsIO, mockFeedFetcher, &stdoutBuf, &stderrBuf)
+		// run with Mocks
+		exitCode := run([]string{"rss_reader", "rkladko@gmail.com"}, mockFeedsIO, mockFeedFetcher, &stdoutBuf)
 
 		if exitCode != 0 {
 			t.Errorf("Expected exit code 0, got %d. Stderr: %s", exitCode, stderrBuf.String())

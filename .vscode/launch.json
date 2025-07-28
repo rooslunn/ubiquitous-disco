@@ -13,7 +13,7 @@
             "program": "${workspaceFolder}",
             "envFile": "${workspaceFolder}/.env",
             "env": {},
-            "args": []
+            "args": ["rkladko@gmail.com"]
         }
     ]
 }

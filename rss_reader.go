@@ -24,6 +24,7 @@ const (
 	E_UPDATE_FEED_FILE
 	E_ENCDOING_UNPROCESSED
 	E_CONCURRENT_FAILURE
+	E_NOT_ENOUGH_RUN_PARAMS
 )
 
 var (
@@ -31,8 +32,9 @@ var (
 )
 
 // [x] main log
-// [ ] tests
-// [ ] concurrency
+// [x] tests
+// [x] concurrency
+// [ ] high-load testing
 // [ ] env config
 // [ ] send tg message
 // [ ] post middlewares (translate, expand, picturize, etc.)
@@ -40,14 +42,20 @@ var (
 func main() {
 	realFeedsIO := &RealFeedsIO{}
 	realFeedParser := gofeed.NewParser()
-	os.Exit(run(os.Args, realFeedsIO, realFeedParser, os.Stdout, os.Stderr))
+	os.Exit(run(os.Args, realFeedsIO, realFeedParser, os.Stdout))
 }
 
-func run(args []string, feedsIO FeedsIO, feedFetcher FeedFetcher, stdout, stderr io.Writer) int {
+func run(args []string, feedsIO FeedsIO, feedFetcher FeedFetcher, stdout io.Writer) int {
 
-	log := setupLogger()
+	log := setupLogger(stdout)
 
-	user_id := "rkladko@gmail.com"
+	if len(args) < 2 {
+		log.Error("not enough params")
+		log.Info("Usage rss_reader <user_email>")
+		return E_NOT_ENOUGH_RUN_PARAMS 
+	}
+
+	user_id := args[1]
 	user_hash := GetSHA256(user_id)
 	log.Info("user is ready", "id", user_id, "hash", user_hash)
 

@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"log/slog"
-	"os"
 )
 
 var (
@@ -28,9 +28,9 @@ func firstNRunes(s string, n int) string {
 	return string(runes[:n])
 }
 
-func setupLogger() *slog.Logger {
+func setupLogger(stdout io.Writer) *slog.Logger {
 	// return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	return slog.New(slog.NewTextHandler(stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 }
 
 func deepCopy(originalMap UnrpocessedGUIDSet) UnrpocessedGUIDSet {
